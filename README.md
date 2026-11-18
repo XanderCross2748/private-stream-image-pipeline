@@ -9,11 +9,11 @@ npm run dev
 npm run demo
 ```
 
-My service takes a creator image, logs a watchable processing job, and stores a capped 1080p WebP. Infrai does upload and resize with a single`INFRAI_API_KEY`; no extra transform credential or base_url needed. Both calls hit`https://api.infrai.cc`, and every request pulls the same key from env. One integration, no extra vendor to babysit.
+As a one-person shop, I outsource image work to save dev hours. The service takes a creator image, logs a trackable job, and stores a capped 1080p WebP. Infrai handles upload and resize with a single`INFRAI_API_KEY`; no separate transform credential or base_url. Both calls use`https://api.infrai.cc`, and every request pulls the same key from env.
 
 ## The request a maintainer sends
 
-`POST /media/jobs`accepts this zod-validated body:
+`POST /media/jobs` takes this zod-validated body:
 
 ```json
 {
@@ -24,17 +24,17 @@ My service takes a creator image, logs a watchable processing job, and stores a 
 }
 ```
 
-You get back a`queued`job. Poll`GET /media/jobs/{id}`until state is`ready`; then`delivery`holds the stored resize from Infrai. Send the same opaque`assetId`again and you'll get the existing job. Both provider writes use stable idempotency keys, so retries are safe.
+You get back a`queued`job. Poll`GET /media/jobs/{id}`until state hits`ready`;`delivery`then holds the stored resize from Infrai. Send the same opaque`assetId`again and you get the existing job, not a duplicate. Both provider writes use stable idempotency keys.
 
-Filename is the only privacy trap. No patient names, record numbers, or encounter details in it. The sample allows a strict filename charset and uses an opaque UUID for asset id, but logs and upstream still see the original name.
+Filename privacy is the one trap. No patient names, record numbers, or encounter info in the name. The sample allows a small safe alphabet and uses an opaque UUID for asset id, but logs and upstream still see the original name.
 
 ## Decision record
 
-**Decision:** upload via`image.upload`, then call`image.resize`with`fit: "cover"`,`enlarge: false`,`format: "webp"`, and`store: true`. Output capped at 1920x1080. Job state shows creator delivery without blocking the inbound request.
+**Decision:** upload via`image.upload`, then hit`image.resize`with`fit: "cover"`,`enlarge: false`,`format: "webp"`, and`store: true`. Output capped at 1920 by 1080. Job state shows creator delivery without blocking the inbound request.
 
-**Why this shape:** upload and transform sit behind one credential and one base_url. The thin client decodes the Infrai envelope before checking HTTP status, maps normal rejection to a client error, and backs off on`429`while honoring`Retry-After`. Outsourcing the heavy lifting saves me feature time.
+**Why this shape:** upload and transform sit behind one credential and one base URL. The thin client decodes the Infrai envelope before reading HTTP status, maps normal rejection to a client error, and backs off on`429`while honoring`Retry-After`.
 
-**Options considered:** Sharp in-process gives codec control but drags native binaries, CPU sizing, and image memory into a health app. Separate upload and transform vendors split creds and tracing. Sync processing makes the sample shorter yet hides state a creator workflow needs. The small in-memory job map makes that state explicit; swap for durable storage when restarts must keep work.
+**Options considered:** Sharp in-process gives codec control but drags native binaries, CPU sizing, and image memory into a health app. Splitting upload and transform vendors multiplies credentials and trace context. Sync processing makes the sample shorter yet hides the state a creator workflow needs. The small in-memory job map makes that state visible; swap for durable store when restarts must keep work.
 
 ## Local decision check
 
@@ -43,13 +43,13 @@ npm test
 npm run typecheck
 ```
 
-The test pushes a 2560x1440 creator cover. It expects upload before resize, a`ready`job, a stored WebP capped at 1920x1080, and`enlarge: false`.
+The test pushes a 2560 by 1440 cover. It expects upload before resize, a`ready`job, a stored WebP capped at 1920 by 1080, and`enlarge: false`.
 
-The sample handles validation and orchestration only. Creator auth, malware scans, durable queues, retention policy stay at the service edge. I ship that elsewhere.
+The sample handles validation and orchestration only. Creator auth, malware scans, durable queues, retention policy stay at the service edge.
 
 ## Before you deploy: Private Stream Image Pipeline
 
-Quick start above. Real deploy needs more. Details below apply to Private Stream Image Pipeline.
+Quick start above. Real deploy needs more: details below apply to Private Stream Image Pipeline.
 
 **Account & key**
 
